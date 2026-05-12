@@ -102,32 +102,27 @@ function transformFinancial(pages) {
 
 // ─── fetch per-ticker data ───────────────────────────────────────────────────
 
-async function fetchTicker(ticker) {
+async function fetchTicker(ticker, { period = 'quarterly', numPeriods = 20 } = {}) {
   log(`${ticker}: fetching overview...`);
   const overview = await get(`/api/stock/${ticker}/overview`);
 
-  log(`${ticker}: fetching income statement (quarterly, 20 periods)...`);
-  const incomeStatement = await get(
-    `/api/stock/${ticker}/income-statement?period=quarterly&numPeriods=20`
-  );
+  const q = `period=${period}&numPeriods=${numPeriods}`;
 
-  log(`${ticker}: fetching balance sheet (quarterly, 20 periods)...`);
-  const balanceSheet = await get(
-    `/api/stock/${ticker}/balance-sheet?period=quarterly&numPeriods=20`
-  );
+  log(`${ticker}: fetching income statement (${period}, ${numPeriods} periods)...`);
+  const incomeStatement = await get(`/api/stock/${ticker}/income-statement?${q}`);
 
-  log(`${ticker}: fetching cash flow (quarterly, 20 periods)...`);
-  const cashFlow = await get(
-    `/api/stock/${ticker}/cash-flow?period=quarterly&numPeriods=20`
-  );
+  log(`${ticker}: fetching balance sheet (${period}, ${numPeriods} periods)...`);
+  const balanceSheet = await get(`/api/stock/${ticker}/balance-sheet?${q}`);
 
-  log(`${ticker}: fetching financial ratios (quarterly, 20 periods)...`);
-  const ratios = await get(
-    `/api/stock/${ticker}/ratios?period=quarterly&numPeriods=20`
-  );
+  log(`${ticker}: fetching cash flow (${period}, ${numPeriods} periods)...`);
+  const cashFlow = await get(`/api/stock/${ticker}/cash-flow?${q}`);
+
+  log(`${ticker}: fetching financial ratios (${period}, ${numPeriods} periods)...`);
+  const ratios = await get(`/api/stock/${ticker}/ratios?${q}`);
 
   return {
     ticker,
+    period,
     fetchedAt: new Date().toISOString(),
     overview: transformOverview(overview.data ?? overview),
     incomeStatement: transformFinancial(incomeStatement.data ?? incomeStatement),
@@ -140,11 +135,17 @@ async function fetchTicker(ticker) {
 // ─── main ────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const tickers = process.argv.slice(2).map((t) => t.toUpperCase());
+  const args = process.argv.slice(2);
+  const yearly = args.includes('--yearly');
+  const tickers = args.filter((a) => !a.startsWith('--')).map((t) => t.toUpperCase());
+  const period = yearly ? 'yearly' : 'quarterly';
+  const numPeriods = yearly ? 5 : 20;
+  const fileSuffix = yearly ? '_yearly' : '';
 
   if (tickers.length === 0) {
-    console.error('Usage: node scripts/fetch.js <TICKER> [TICKER2 ...]');
-    console.error('Example: node scripts/fetch.js VNM FPT VIC');
+    console.error('Usage: node scripts/fetch.js <TICKER> [TICKER2 ...] [--yearly]');
+    console.error('  Default : quarterly data, last 20 periods → output/<TICKER>.json');
+    console.error('  --yearly: annual data,    last 5 years    → output/<TICKER>_yearly.json');
     process.exit(1);
   }
 
@@ -166,10 +167,10 @@ async function main() {
 
   for (const ticker of tickers) {
     try {
-      const data = await fetchTicker(ticker);
-      const outFile = join(OUTPUT_DIR, `${ticker}.json`);
+      const data = await fetchTicker(ticker, { period, numPeriods });
+      const outFile = join(OUTPUT_DIR, `${ticker}${fileSuffix}.json`);
       await writeFile(outFile, JSON.stringify(data, null, 2), 'utf8');
-      log(`Saved → output/${ticker}.json`);
+      log(`Saved → output/${ticker}${fileSuffix}.json`);
       results.success.push(ticker);
     } catch (err) {
       console.error(`${ticker}: FAILED — ${err.message}`);
