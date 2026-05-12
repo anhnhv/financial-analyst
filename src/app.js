@@ -4,6 +4,7 @@ const cors = require('cors');
 
 const stockRoutes = require('./routes/stockRoutes');
 const vndRoutes = require('./routes/vndRoutes');
+const aiRoutes = require('./routes/aiRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -58,6 +59,9 @@ app.get('/', (_req, res) => {
         indexPrice: 'GET /api/stock/index/:indexCode/price?interval=1D|1W|1M  (e.g. VNINDEX, HNXINDEX, VN30)',
         sectors: 'GET /api/stock/sectors',
       },
+      ai: {
+        generate: 'POST /api/ai/generate  — body: { prompt, systemInstruction? }',
+      },
       vndirect: {
         profile: 'GET /api/vnd/:ticker/profile',
         summary: 'GET /api/vnd/:ticker/summary?type=quarterly|yearly',
@@ -87,6 +91,9 @@ app.use('/api/stock', stockRoutes);
 
 // VNDirect routes → /api/vnd/:ticker/...
 app.use('/api/vnd', vndRoutes);
+
+// Google AI routes → /api/ai/...
+app.use('/api/ai', aiRoutes);
 
 // ── Error handler ─────────────────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
