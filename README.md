@@ -130,6 +130,22 @@ curl "http://localhost:3000/api/stock/VNM/price-board"
 curl "http://localhost:3000/api/stock/sectors"
 ```
 
+## Fetch Script (`scripts/fetch.js`)
+
+Requires the API server to be running (`npm start`). Saves results to `output/<TICKER>.json` and `output/sectors.json`.
+
+```bash
+# One or more tickers
+node scripts/fetch.js VNM FPT VIC
+
+# Via npm
+npm run fetch -- VNM FPT
+```
+
+Each output file contains: overview, income statement, balance sheet, cash flow, and financial ratios (last 20 quarterly periods).
+
+---
+
 ## Notes
 
 - KBS returns prices multiplied by 1000 — the API normalizes them (e.g., `60600` → `60.6` thousand VND = `60,600` VND).
