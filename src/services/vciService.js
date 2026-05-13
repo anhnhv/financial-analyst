@@ -119,14 +119,18 @@ function estimateCountBack(startDate, endDate) {
  * Fetch a single financial statement section.
  * section: 'INCOME_STATEMENT' | 'BALANCE_SHEET' | 'CASH_FLOW'
  * type: 'quarterly' | 'yearly'
+ * startYear: optional number – exclude rows with yearReport < startYear
  */
-async function getFinancialStatement(ticker, section, type = 'quarterly', lang = 'en') {
+async function getFinancialStatement(ticker, section, type = 'quarterly', lang = 'en', startYear = null) {
   const { data } = await iqClient.get(
     `/v1/company/${ticker.toUpperCase()}/financial-statement`,
     { params: { section } },
   );
   const payload = data?.data ?? data;
-  const rows = type === 'yearly' ? (payload?.years ?? payload) : (payload?.quarters ?? payload);
+  let rows = type === 'yearly' ? (payload?.years ?? payload) : (payload?.quarters ?? payload);
+  if (startYear && Array.isArray(rows)) {
+    rows = rows.filter((r) => r.yearReport >= startYear);
+  }
   const labelMap = await getLabelMap(ticker, lang);
   return applyLabelMap(rows, labelMap);
 }
@@ -144,35 +148,55 @@ async function getStockOverview(ticker) {
  * Fetch Income Statement.
  * type: 'quarterly' | 'yearly'
  */
-async function getIncomeStatement(ticker, type = 'quarterly', lang = 'en') {
-  return getFinancialStatement(ticker, 'INCOME_STATEMENT', type, lang);
+async function getIncomeStatement(ticker, type = 'quarterly', lang = 'en', startYear = null) {
+  return getFinancialStatement(ticker, 'INCOME_STATEMENT', type, lang, startYear);
 }
 
 /**
  * Fetch Balance Sheet.
  * type: 'quarterly' | 'yearly'  lang: 'en' | 'vi'
  */
-async function getBalanceSheet(ticker, type = 'quarterly', lang = 'en') {
-  return getFinancialStatement(ticker, 'BALANCE_SHEET', type, lang);
+async function getBalanceSheet(ticker, type = 'quarterly', lang = 'en', startYear = null) {
+  return getFinancialStatement(ticker, 'BALANCE_SHEET', type, lang, startYear);
 }
 
 /**
  * Fetch Cash Flow Statement.
  * type: 'quarterly' | 'yearly'  lang: 'en' | 'vi'
  */
-async function getCashFlow(ticker, type = 'quarterly', lang = 'en') {
-  return getFinancialStatement(ticker, 'CASH_FLOW', type, lang);
+async function getCashFlow(ticker, type = 'quarterly', lang = 'en', startYear = null) {
+  return getFinancialStatement(ticker, 'CASH_FLOW', type, lang, startYear);
 }
 
 /**
  * Fetch Financial Ratios (PE, PB, ROE, ROA, etc.).
- * Returns an array sorted newest-first with both yearly and TTM entries.
+ * type: 'quarterly' | 'yearly'
+ * startYear: optional number – exclude rows with yearReport < startYear
+ * When 'yearly': only RATIO_YEAR entries are returned and the internal
+ *   'quarter' field (VCI uses 5 to denote annual) is removed.
+ * When 'quarterly': only RATIO_TTM entries (quarter 1–4) are returned.
  */
-async function getFinancialRatios(ticker) {
+async function getFinancialRatios(ticker, type = 'quarterly', startYear = null) {
   const { data } = await iqClient.get(
     `/v1/company/${ticker.toUpperCase()}/statistics-financial`,
   );
-  return data?.data ?? data;
+  const rows = data?.data ?? data;
+  if (!Array.isArray(rows)) return rows;
+
+  let filtered;
+  if (type === 'yearly') {
+    filtered = rows
+      .filter((r) => r.ratioType === 'RATIO_YEAR')
+      .map(({ quarter, ...rest }) => rest); // 'quarter:5' is meaningless for annual rows
+  } else {
+    filtered = rows.filter((r) => r.ratioType === 'RATIO_TTM');
+  }
+
+  if (startYear) {
+    filtered = filtered.filter((r) => (r.yearReport ?? parseInt(r.year)) >= startYear);
+  }
+
+  return filtered;
 }
 
 /**

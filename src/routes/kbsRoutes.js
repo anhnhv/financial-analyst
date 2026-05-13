@@ -262,7 +262,7 @@ router.get('/:ticker/summary', async (req, res, next) => {
         ratios: resolve(ratios),
         summaryReport: resolve(summaryReport),
       },
-      priceHistory: resolve(price),
+      // priceHistory: resolve(price),
     });
   } catch (err) {
     next(err);

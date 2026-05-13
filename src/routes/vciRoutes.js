@@ -184,10 +184,10 @@ router.get('/:ticker/summary', async (req, res, next) => {
     const [overview, incomeStatement, balanceSheet, cashFlow, ratios, price] =
       await Promise.allSettled([
         vci.getStockOverview(ticker),
-        vci.getIncomeStatement(ticker, period, lang),
-        vci.getBalanceSheet(ticker, period, lang),
-        vci.getCashFlow(ticker, period, lang),
-        vci.getFinancialRatios(ticker),
+        vci.getIncomeStatement(ticker, period, lang, range.years[0]),
+        vci.getBalanceSheet(ticker, period, lang, range.years[0]),
+        vci.getCashFlow(ticker, period, lang, range.years[0]),
+        vci.getFinancialRatios(ticker, period, range.years[0]),
         vci.getHistoricalPrice(ticker, range.startDate, range.endDate, interval),
       ]);
 
@@ -209,7 +209,7 @@ router.get('/:ticker/summary', async (req, res, next) => {
         cashFlow: resolve(cashFlow),
         ratios: resolve(ratios),
       },
-      priceHistory: resolve(price),
+      // priceHistory: resolve(price),
     });
   } catch (err) {
     next(err);
