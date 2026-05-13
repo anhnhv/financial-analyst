@@ -7,6 +7,7 @@ Running on `http://localhost:3000` (Node.js v25, Express).
 | Source | Base URL | Used For |
 |---|---|---|
 | **KBS** (KB Securities Vietnam) | `kbbuddywts.kbsec.com.vn` | Prices, financials, real-time board |
+| **TCBS** (Techcombank Securities) | `apipubaws.tcbs.com.vn` | Financials, dividends, shareholders, news |
 | **VNDirect** | `finfo-api.vndirect.com.vn` | Cross-reference data |
 
 ## KBS Endpoints (`/api/stock`)
@@ -27,6 +28,24 @@ Running on `http://localhost:3000` (Node.js v25, Express).
 | `GET /api/stock/index/:indexCode/price` | VNINDEX, HNXINDEX, VN30 history |
 | `GET /api/stock/sectors` | All 25 market sectors |
 
+## TCBS Endpoints (`/api/tcbs`)
+
+| Endpoint | Description |
+|---|---|
+| `GET /api/tcbs/:ticker/overview` | Company profile |
+| `GET /api/tcbs/:ticker/summary` | Full summary in one call |
+| `GET /api/tcbs/:ticker/financials` | Income, balance, cashflow, ratios combined |
+| `GET /api/tcbs/:ticker/income-statement` | Revenue, profit, EPS |
+| `GET /api/tcbs/:ticker/balance-sheet` | Assets, liabilities, equity |
+| `GET /api/tcbs/:ticker/cash-flow` | Operating/investing/financing cash flows |
+| `GET /api/tcbs/:ticker/ratios` | PE, PB, ROE, ROA, margins |
+| `GET /api/tcbs/:ticker/price` | OHLCV history (5 years, daily by default) |
+| `GET /api/tcbs/:ticker/dividends` | Dividend history |
+| `GET /api/tcbs/:ticker/shareholders` | Major shareholders |
+| `GET /api/tcbs/:ticker/insider-transactions` | Insider dealing transactions |
+| `GET /api/tcbs/:ticker/recommendation` | Analyst recommendations |
+| `GET /api/tcbs/:ticker/news` | Latest company news |
+
 ## VNDirect Endpoints (`/api/vnd`)
 
 | Endpoint | Description |
@@ -45,6 +64,8 @@ Running on `http://localhost:3000` (Node.js v25, Express).
 
 ## Query Parameters
 
+### KBS (`/api/stock`)
+
 | Parameter | Values | Default | Description |
 |---|---|---|---|
 | `period` | `quarterly`, `yearly` | `quarterly` | Financial reporting period |
@@ -52,6 +73,15 @@ Running on `http://localhost:3000` (Node.js v25, Express).
 | `interval` | `1D`, `1W`, `1M` | `1D` | Price bar interval |
 | `startDate` | `YYYY-MM-DD` | 5 years ago | Start of date range |
 | `endDate` | `YYYY-MM-DD` | today | End of date range |
+
+### TCBS (`/api/tcbs`)
+
+| Parameter | Values | Default | Description |
+|---|---|---|---|
+| `type` | `quarterly`, `yearly` | `quarterly` | Financial reporting period |
+| `resolution` | `1D`, `1W`, `1M` | `1D` | Price bar interval |
+| `page` | integer | `0` | Page index for paginated results |
+| `size` | integer | `20` | Page size for paginated results |
 
 ## Financial Report Type Codes (KBS)
 
@@ -99,6 +129,8 @@ SSI_SECRET_KEY=
 # Health check
 curl http://localhost:3000/health
 
+# ── KBS ──────────────────────────────────────────────────────────────────────
+
 # Stock overview
 curl "http://localhost:3000/api/stock/VNM/overview"
 
@@ -128,6 +160,38 @@ curl "http://localhost:3000/api/stock/VNM/price-board"
 
 # All market sectors
 curl "http://localhost:3000/api/stock/sectors"
+
+# ── TCBS ─────────────────────────────────────────────────────────────────────
+
+# Company overview
+curl "http://localhost:3000/api/tcbs/VNM/overview"
+
+# All financials in one call (quarterly)
+curl "http://localhost:3000/api/tcbs/VNM/financials"
+
+# Yearly income statement
+curl "http://localhost:3000/api/tcbs/VNM/income-statement?type=yearly"
+
+# 5-year daily price history
+curl "http://localhost:3000/api/tcbs/VNM/price"
+
+# Dividend history
+curl "http://localhost:3000/api/tcbs/VNM/dividends"
+
+# Major shareholders
+curl "http://localhost:3000/api/tcbs/VNM/shareholders"
+
+# Insider transactions
+curl "http://localhost:3000/api/tcbs/VNM/insider-transactions"
+
+# Analyst recommendations
+curl "http://localhost:3000/api/tcbs/VNM/recommendation"
+
+# Latest news
+curl "http://localhost:3000/api/tcbs/VNM/news"
+
+# Full summary
+curl "http://localhost:3000/api/tcbs/VNM/summary"
 ```
 
 ## Fetch Script (`scripts/fetch.js`)

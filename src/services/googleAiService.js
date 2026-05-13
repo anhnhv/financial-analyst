@@ -3,7 +3,7 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
 
 // gemini-3.1-flash-lite is free on the free tier (as of 2025/2026)
-const MODEL = 'gemini-2.5-flash';
+const MODEL = 'gemini-3.1-flash-lite';
 
 function getModel(systemInstruction) {
   return genAI.getGenerativeModel({

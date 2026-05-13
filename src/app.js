@@ -2,7 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 
-const stockRoutes = require('./routes/stockRoutes');
+const kbsRoutes = require('./routes/kbsRoutes');
+const tcbsRoutes = require('./routes/tcbsRoutes');
 const vndRoutes = require('./routes/vndRoutes');
 const aiRoutes = require('./routes/aiRoutes');
 
@@ -86,8 +87,11 @@ app.get('/', (_req, res) => {
   });
 });
 
-// TCBS routes  → /api/stock/:ticker/...
-app.use('/api/stock', stockRoutes);
+// KBS (KB Securities) routes → /api/stock/:ticker/...
+app.use('/api/stock', kbsRoutes);
+
+// TCBS (Techcombank Securities) routes → /api/tcbs/:ticker/...
+app.use('/api/tcbs', tcbsRoutes);
 
 // VNDirect routes → /api/vnd/:ticker/...
 app.use('/api/vnd', vndRoutes);
