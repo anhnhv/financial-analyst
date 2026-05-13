@@ -4,6 +4,7 @@ const cors = require('cors');
 
 const kbsRoutes = require('./routes/kbsRoutes');
 const tcbsRoutes = require('./routes/tcbsRoutes');
+const vciRoutes = require('./routes/vciRoutes');
 const vndRoutes = require('./routes/vndRoutes');
 const aiRoutes = require('./routes/aiRoutes');
 
@@ -92,6 +93,9 @@ app.use('/api/stock', kbsRoutes);
 
 // TCBS (Techcombank Securities) routes → /api/tcbs/:ticker/...
 app.use('/api/tcbs', tcbsRoutes);
+
+// VCI (Viet Capital Securities) routes → /api/vci/:ticker/...
+app.use('/api/vci', vciRoutes);
 
 // VNDirect routes → /api/vnd/:ticker/...
 app.use('/api/vnd', vndRoutes);

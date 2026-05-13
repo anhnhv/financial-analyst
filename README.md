@@ -8,6 +8,7 @@ Running on `http://localhost:3000` (Node.js v25, Express).
 |---|---|---|
 | **KBS** (KB Securities Vietnam) | `kbbuddywts.kbsec.com.vn` | Prices, financials, real-time board |
 | **TCBS** (Techcombank Securities) | `apipubaws.tcbs.com.vn` | Financials, dividends, shareholders, news |
+| **VCI** (Viet Capital Securities) | `iq.vietcap.com.vn` / `trading.vietcap.com.vn` | Financials, prices, intraday, sectors |
 | **VNDirect** | `finfo-api.vndirect.com.vn` | Cross-reference data |
 
 ## KBS Endpoints (`/api/stock`)
@@ -46,6 +47,23 @@ Running on `http://localhost:3000` (Node.js v25, Express).
 | `GET /api/tcbs/:ticker/recommendation` | Analyst recommendations |
 | `GET /api/tcbs/:ticker/news` | Latest company news |
 
+## VCI Endpoints (`/api/vci`)
+
+| Endpoint | Description |
+|---|---|
+| `GET /api/vci/:ticker/overview` | Symbol info (exchange, type, name) |
+| `GET /api/vci/:ticker/summary` | Full summary in one call |
+| `GET /api/vci/:ticker/financials` | Income, balance, cashflow, ratios combined |
+| `GET /api/vci/:ticker/income-statement` | Revenue, profit, EPS |
+| `GET /api/vci/:ticker/balance-sheet` | Assets, liabilities, equity |
+| `GET /api/vci/:ticker/cash-flow` | Operating/investing/financing cash flows |
+| `GET /api/vci/:ticker/ratios` | PE, PB, ROE, ROA, dividend yield, market cap |
+| `GET /api/vci/:ticker/price` | OHLCV history (5 years, daily by default) |
+| `GET /api/vci/:ticker/intraday` | Intraday tick data |
+| `GET /api/vci/symbols` | All listed symbols with exchange and type |
+| `GET /api/vci/symbols/group/:group` | Symbols by group (VN30, HNX30, UPCOM, etc.) |
+| `GET /api/vci/sectors` | ICB industry sector codes |
+
 ## VNDirect Endpoints (`/api/vnd`)
 
 | Endpoint | Description |
@@ -82,6 +100,17 @@ Running on `http://localhost:3000` (Node.js v25, Express).
 | `resolution` | `1D`, `1W`, `1M` | `1D` | Price bar interval |
 | `page` | integer | `0` | Page index for paginated results |
 | `size` | integer | `20` | Page size for paginated results |
+
+### VCI (`/api/vci`)
+
+| Parameter | Values | Default | Description |
+|---|---|---|---|
+| `period` | `quarterly`, `yearly` | `quarterly` | Financial reporting period |
+| `interval` | `1D`, `1W`, `1M` | `1D` | Price bar interval |
+| `startDate` | `YYYY-MM-DD` | 5 years ago | Start of price date range |
+| `endDate` | `YYYY-MM-DD` | today | End of price date range |
+| `limit` | integer | `100` | Intraday tick count (max 10000) |
+| `lastTime` | epoch seconds | — | Intraday pagination cursor |
 
 ## Financial Report Type Codes (KBS)
 
@@ -190,8 +219,37 @@ curl "http://localhost:3000/api/tcbs/VNM/recommendation"
 # Latest news
 curl "http://localhost:3000/api/tcbs/VNM/news"
 
+# ── VCI ─────────────────────────────────────────────────────────────────────
+
+# Company overview
+curl "http://localhost:3000/api/vci/VNM/overview"
+
+# All financials (quarterly)
+curl "http://localhost:3000/api/vci/VNM/financials"
+
+# Yearly income statement
+curl "http://localhost:3000/api/vci/VNM/income-statement?period=yearly"
+
+# 5-year daily price history
+curl "http://localhost:3000/api/vci/VNM/price"
+
+# Financial ratios
+curl "http://localhost:3000/api/vci/VNM/ratios"
+
+# Intraday ticks
+curl "http://localhost:3000/api/vci/VNM/intraday"
+
 # Full summary
-curl "http://localhost:3000/api/tcbs/VNM/summary"
+curl "http://localhost:3000/api/vci/VNM/summary"
+
+# All symbols
+curl "http://localhost:3000/api/vci/symbols"
+
+# VN30 constituents
+curl "http://localhost:3000/api/vci/symbols/group/VN30"
+
+# ICB sectors
+curl "http://localhost:3000/api/vci/sectors"
 ```
 
 ## Fetch Script (`scripts/fetch.js`)
