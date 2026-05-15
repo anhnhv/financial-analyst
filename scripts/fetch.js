@@ -18,10 +18,15 @@ const { join } = require('node:path');
 const OUTPUT_DIR = join(__dirname, '..', 'output');
 const BASE_URL = process.env.API_URL || 'http://localhost:3000';
 
+const VCI_PATH = '/api/vci';
+const KBS_PATH = '/api/kbs';
+
+const API_URL = BASE_URL + VCI_PATH; // Change to KBS_PATH for KBS data
+
 // ─── helpers ────────────────────────────────────────────────────────────────
 
 async function get(path) {
-  const url = `${BASE_URL}${path}`;
+  const url = `${API_URL}${path}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status} — ${url}`);
   return res.json();
@@ -53,7 +58,7 @@ function transformOverview(raw) {
  * KBS API's duplicate "Q4 2025" entries (one per report revision) collapse
  * into a single column.
  */
-function transformFinancial(pages) {
+function transformKBSFinancial(pages) {
   if (!Array.isArray(pages) || pages.length === 0) return { periods: [], rows: [] };
 
   // Build ordered list of unique columns, tracking which (page, valueKey) to read
@@ -103,32 +108,26 @@ function transformFinancial(pages) {
 // ─── fetch per-ticker data ───────────────────────────────────────────────────
 
 async function fetchTicker(ticker, { period = 'quarterly', numPeriods = 20 } = {}) {
-  log(`${ticker}: fetching overview...`);
-  const overview = await get(`/api/stock/${ticker}/overview`);
+  log(`${ticker}: fetching summary (${period}, ${numPeriods} periods)...`);
+  const q = `period=${period}`;
+  const summary = await get(`/${ticker}/summary?${q}`);
 
-  const q = `period=${period}&numPeriods=${numPeriods}`;
-
-  log(`${ticker}: fetching income statement (${period}, ${numPeriods} periods)...`);
-  const incomeStatement = await get(`/api/stock/${ticker}/income-statement?${q}`);
-
-  log(`${ticker}: fetching balance sheet (${period}, ${numPeriods} periods)...`);
-  const balanceSheet = await get(`/api/stock/${ticker}/balance-sheet?${q}`);
-
-  log(`${ticker}: fetching cash flow (${period}, ${numPeriods} periods)...`);
-  const cashFlow = await get(`/api/stock/${ticker}/cash-flow?${q}`);
-
-  log(`${ticker}: fetching financial ratios (${period}, ${numPeriods} periods)...`);
-  const ratios = await get(`/api/stock/${ticker}/ratios?${q}`);
+  const f = summary.financials ?? {};
 
   return {
     ticker,
     period,
     fetchedAt: new Date().toISOString(),
-    overview: transformOverview(overview.data ?? overview),
-    incomeStatement: transformFinancial(incomeStatement.data ?? incomeStatement),
-    balanceSheet: transformFinancial(balanceSheet.data ?? balanceSheet),
-    cashFlow: transformFinancial(cashFlow.data ?? cashFlow),
-    ratios: transformFinancial(ratios.data ?? ratios),
+    // overview: transformOverview(summary.overview),
+    // incomeStatement: transformFinancial(f.incomeStatement),
+    // balanceSheet: transformFinancial(f.balanceSheet),
+    // cashFlow: transformFinancial(f.cashFlow),
+    // ratios: transformFinancial(f.ratios),
+    overview: summary.overview,
+    incomeStatement: f.incomeStatement,
+    balanceSheet: f.balanceSheet,
+    cashFlow: f.cashFlow,
+    ratios: f.ratios,
   };
 }
 
@@ -140,11 +139,9 @@ async function main() {
   const tickers = args.filter((a) => !a.startsWith('--')).map((t) => t.toUpperCase());
   const period = yearly ? 'yearly' : 'quarterly';
   const numPeriods = yearly ? 5 : 20;
-  const fileSuffix = yearly ? '_yearly' : '';
-
   if (tickers.length === 0) {
     console.error('Usage: node scripts/fetch.js <TICKER> [TICKER2 ...] [--yearly]');
-    console.error('  Default : quarterly data, last 20 periods → output/<TICKER>.json');
+    console.error('  Default : quarterly data, last 20 periods → output/<TICKER>_quarterly.json');
     console.error('  --yearly: annual data,    last 5 years    → output/<TICKER>_yearly.json');
     process.exit(1);
   }
@@ -154,11 +151,14 @@ async function main() {
   // Fetch sectors once
   log('Fetching market sectors...');
   try {
-    const sectors = await get('/api/stock/sectors');
+    const res = await fetch(`${BASE_URL}/api/stock/sectors`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const sectors = await res.json();
     const sectorsFile = join(OUTPUT_DIR, 'sectors.json');
     await writeFile(sectorsFile, JSON.stringify(sectors, null, 2), 'utf8');
     log(`Saved → output/sectors.json (${sectors.data?.length ?? '?'} sectors)`);
   } catch (err) {
+    console.log(err);
     console.error(`Sectors fetch failed: ${err.message}`);
   }
 
@@ -168,9 +168,9 @@ async function main() {
   for (const ticker of tickers) {
     try {
       const data = await fetchTicker(ticker, { period, numPeriods });
-      const outFile = join(OUTPUT_DIR, `${ticker}${fileSuffix}.json`);
+      const outFile = join(OUTPUT_DIR, `${ticker}_${period}.json`);
       await writeFile(outFile, JSON.stringify(data, null, 2), 'utf8');
-      log(`Saved → output/${ticker}${fileSuffix}.json`);
+      log(`Saved → output/${ticker}_${period}.json`);
       results.success.push(ticker);
     } catch (err) {
       console.error(`${ticker}: FAILED — ${err.message}`);

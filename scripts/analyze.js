@@ -30,7 +30,7 @@ function log(msg) {
 
 function deriveOutputPath(inputPath) {
   const name = basename(inputPath, extname(inputPath));
-  return join(OUTPUT_DIR, `${name}_analysis.json`);
+  return join(OUTPUT_DIR, `${name}_analysis.txt`);
 }
 
 /**
@@ -44,29 +44,35 @@ function buildPromptData(stock) {
     sections.push(`## Company Overview\n${JSON.stringify(stock.overview, null, 2)}`);
   }
 
-  // For financial tables, send periods + first ~20 rows to keep prompt small
-  for (const key of ['incomeStatement', 'balanceSheet', 'cashFlow', 'ratios', 'summaryReport']) {
+  const LABELS = {
+    incomeStatement: 'Income Statement',
+    balanceSheet: 'Balance Sheet',
+    cashFlow: 'Cash Flow Statement',
+    ratios: 'Financial Ratios',
+    summaryReport: 'Summary Report',
+  };
+
+  for (const key of Object.keys(LABELS)) {
     const table = stock[key];
-    if (!table || !table.periods || !table.rows) continue;
+    if (!table) continue;
 
-    const label = {
-      incomeStatement: 'Income Statement',
-      balanceSheet: 'Balance Sheet',
-      cashFlow: 'Cash Flow Statement',
-      ratios: 'Financial Ratios',
-      summaryReport: 'Summary Report',
-    }[key];
+    const label = LABELS[key];
 
-    const trimmedRows = table.rows.slice(0, 20).map((row) => ({
-      item: row.item,
-      ...(row.unit ? { unit: row.unit } : {}),
-      values: row.values,
-    }));
+    // Format A: { periods, rows } — KBS-style
+    if (table.periods && table.rows) {
+      const rows = table.rows.map((row) => ({
+        item: row.item,
+        ...(row.unit ? { unit: row.unit } : {}),
+        values: row.values,
+      }));
+      sections.push(`## ${label}\nPeriods: ${table.periods.join(', ')}\n${JSON.stringify(rows, null, 2)}`);
+      continue;
+    }
 
-    sections.push(
-      `## ${label}\nPeriods: ${table.periods.join(', ')}\n` +
-        JSON.stringify(trimmedRows, null, 2),
-    );
+    // Format B: flat array — VCI-style (each element is one period's data)
+    if (Array.isArray(table) && table.length > 0) {
+      sections.push(`## ${label}\n${JSON.stringify(table, null, 2)}`);
+    }
   }
 
   // Recent price data — last 10 entries only
@@ -211,29 +217,59 @@ YÊU CẦU TRÌNH BÀY
 
 async function main() {
   const args = process.argv.slice(2);
-  if (args.length === 0) {
-    console.error('Usage: node scripts/analyze.js <inputFile> [outputFile]');
+
+  // Parse: --output <path> flag + up to 2 positional input files
+  let outputPath = null;
+  const inputPaths = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--output' && args[i + 1]) {
+      outputPath = args[++i];
+    } else {
+      inputPaths.push(args[i]);
+    }
+  }
+
+  if (inputPaths.length === 0) {
+    console.error('Usage: node scripts/analyze.js <inputFile> [inputFile2] [--output <outputFile>]');
     process.exit(1);
   }
 
-  const inputPath = args[0];
-  const outputPath = args[1] || deriveOutputPath(inputPath);
+  if (!outputPath) outputPath = deriveOutputPath(inputPaths[0]);
 
-  log(`Reading: ${inputPath}`);
-  let stock;
-  try {
-    const raw = await readFile(inputPath, 'utf8');
-    stock = JSON.parse(raw);
-  } catch (err) {
-    console.error(`Failed to read/parse input file: ${err.message}`);
-    process.exit(1);
+  // Read all input files
+  const stocks = [];
+  for (const inputPath of inputPaths.slice(0, 2)) {
+    log(`Reading: ${inputPath}`);
+    try {
+      const raw = await readFile(inputPath, 'utf8');
+      stocks.push({ path: inputPath, data: JSON.parse(raw) });
+    } catch (err) {
+      console.error(`Failed to read/parse input file: ${err.message}`);
+      process.exit(1);
+    }
   }
 
-  const ticker = stock.ticker || basename(inputPath, extname(inputPath));
+  const ticker = stocks[0].data.ticker || basename(inputPaths[0], extname(inputPaths[0]));
   log(`Analysing ${ticker} with AI model...`);
 
-  const promptData = buildPromptData(stock);
-  const prompt = `phân tích doanh nghiệp này, không đứng trên góc nhìn của nhà đầu tư nhỏ lẻ, hãy dựa vào những phân tích mang tính chuyên môn cao.\n\nDữ liệu tài chính của ${ticker}:\n\n${promptData}`;
+  // Build prompt data — label each file by its period when 2 files are given
+  let promptData;
+  if (stocks.length === 1) {
+    promptData = buildPromptData(stocks[0].data);
+  } else {
+    const sections = stocks.map(({ path, data }) => {
+      const label = data.period || basename(path, extname(path));
+      return `# Dữ liệu ${label.toUpperCase()}\n\n${buildPromptData(data)}`;
+    });
+    promptData = sections.join('\n\n---\n\n');
+  }
+
+  const prompt = `Phân tích doanh nghiệp này, không đứng trên góc nhìn của nhà đầu tư nhỏ lẻ lướt sóng, hãy dựa vào những phân tích mang tính chuyên môn cao và đầu tư lâu dài >1 năm.\n\nDữ liệu tài chính của ${ticker}:\n\n${promptData}`;
+
+  // console.log('Prompt built, sending to AI service...', prompt.length);
+  // console.log(prompt.slice(0, 10000) + '...'); // log first 1000 chars of prompt for sanity check
+  // return;
+
 
   let responseText;
   try {
@@ -243,31 +279,11 @@ async function main() {
     process.exit(1);
   }
 
-  // Save raw response before any formatting
-  const rawOutputPath = outputPath.replace(/\.json$/, '_raw.txt');
-  await mkdir(dirname(rawOutputPath), { recursive: true });
-  await writeFile(rawOutputPath, responseText, 'utf8');
-  log(`Raw response saved to: ${rawOutputPath}`);
-
-  // Strip markdown code fences if the model wraps its output
-  const cleaned = responseText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-
-  let analysis;
-  try {
-    analysis = JSON.parse(cleaned);
-  } catch {
-    // If parsing fails, preserve raw text so the caller can inspect it
-    log('Warning: AI response was not valid JSON — saving raw text instead.');
-    analysis = { ticker, analysedAt: new Date().toISOString(), rawResponse: cleaned };
-  }
-
-  // Ensure metadata fields are present
-  analysis.ticker = analysis.ticker || ticker;
-  analysis.analysedAt = analysis.analysedAt || new Date().toISOString();
-  analysis.sourceFile = inputPath;
+  // Ensure output path ends with .txt
+  if (!outputPath.endsWith('.txt')) outputPath += '.txt';
 
   await mkdir(dirname(outputPath), { recursive: true });
-  await writeFile(outputPath, JSON.stringify(analysis, null, 2), 'utf8');
+  await writeFile(outputPath, responseText, 'utf8');
   log(`Analysis saved to: ${outputPath}`);
 }
 
