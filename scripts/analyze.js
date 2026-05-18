@@ -1,15 +1,16 @@
 #!/usr/bin/env node
 /**
  * AI-powered stock analysis script.
- * Reads a fetched stock JSON file, sends it to the Google AI service,
+ * Accepts a ticker code and automatically reads <ticker>_yearly.json and
+ * <ticker>_quarterly.json from ./output/, sends them to the Google AI service,
  * and writes a structured analysis result to the output/ directory.
  *
  * Usage:
- *   node scripts/analyze.js <inputFile> [outputFile]
+ *   node scripts/analyze.js <ticker> [--output <outputFile>]
  *
  * Examples:
- *   node scripts/analyze.js output/VNM.json
- *   node scripts/analyze.js output/VNM.json output/VNM_analysis.json
+ *   node scripts/analyze.js PNJ
+ *   node scripts/analyze.js VNM --output output/VNM_analysis.txt
  */
 
 'use strict';
@@ -26,11 +27,6 @@ const OUTPUT_DIR = join(__dirname, '..', 'output');
 
 function log(msg) {
   console.log(`[${new Date().toISOString()}] ${msg}`);
-}
-
-function deriveOutputPath(inputPath) {
-  const name = basename(inputPath, extname(inputPath));
-  return join(OUTPUT_DIR, `${name}_analysis.txt`);
 }
 
 /**
@@ -218,51 +214,57 @@ YÊU CẦU TRÌNH BÀY
 async function main() {
   const args = process.argv.slice(2);
 
-  // Parse: --output <path> flag + up to 2 positional input files
+  // Parse: ticker positional arg + optional --output <path> flag
   let outputPath = null;
-  const inputPaths = [];
+  let ticker = null;
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--output' && args[i + 1]) {
       outputPath = args[++i];
-    } else {
-      inputPaths.push(args[i]);
+    } else if (!ticker) {
+      ticker = args[i].toUpperCase();
     }
   }
 
-  if (inputPaths.length === 0) {
-    console.error('Usage: node scripts/analyze.js <inputFile> [inputFile2] [--output <outputFile>]');
+  if (!ticker) {
+    console.error('Usage: node scripts/analyze.js <ticker> [--output <outputFile>]');
     process.exit(1);
   }
 
-  if (!outputPath) outputPath = deriveOutputPath(inputPaths[0]);
+  const inputPaths = [
+    join(OUTPUT_DIR, `${ticker}_yearly.json`),
+    join(OUTPUT_DIR, `${ticker}_quarterly.json`),
+  ];
 
-  // Read all input files
+  if (!outputPath) outputPath = join(OUTPUT_DIR, `${ticker}_analysis.txt`);
+
+  // Read all input files that exist
   const stocks = [];
-  for (const inputPath of inputPaths.slice(0, 2)) {
+  for (const inputPath of inputPaths) {
     log(`Reading: ${inputPath}`);
     try {
       const raw = await readFile(inputPath, 'utf8');
       stocks.push({ path: inputPath, data: JSON.parse(raw) });
     } catch (err) {
-      console.error(`Failed to read/parse input file: ${err.message}`);
-      process.exit(1);
+      if (err.code === 'ENOENT') {
+        log(`File not found, skipping: ${inputPath}`);
+      } else {
+        console.error(`Failed to read/parse input file: ${err.message}`);
+        process.exit(1);
+      }
     }
   }
 
-  const ticker = stocks[0].data.ticker || basename(inputPaths[0], extname(inputPaths[0]));
+  if (stocks.length === 0) {
+    console.error(`No data files found for ticker "${ticker}" in ${OUTPUT_DIR}`);
+    process.exit(1);
+  }
   log(`Analysing ${ticker} with AI model...`);
 
-  // Build prompt data — label each file by its period when 2 files are given
-  let promptData;
-  if (stocks.length === 1) {
-    promptData = buildPromptData(stocks[0].data);
-  } else {
-    const sections = stocks.map(({ path, data }) => {
-      const label = data.period || basename(path, extname(path));
-      return `# Dữ liệu ${label.toUpperCase()}\n\n${buildPromptData(data)}`;
-    });
-    promptData = sections.join('\n\n---\n\n');
-  }
+  // Build prompt data — include raw JSON for each file, labelled by period
+  const promptData = stocks.map(({ path, data }) => {
+    const label = data.period || basename(path, extname(path));
+    return `# Dữ liệu ${label.toUpperCase()}\n\n${JSON.stringify(data, null, 2)}`;
+  }).join('\n\n---\n\n');
 
   const prompt = `Phân tích doanh nghiệp này, không đứng trên góc nhìn của nhà đầu tư nhỏ lẻ lướt sóng, hãy dựa vào những phân tích mang tính chuyên môn cao và đầu tư lâu dài >1 năm.\n\nDữ liệu tài chính của ${ticker}:\n\n${promptData}`;
 
