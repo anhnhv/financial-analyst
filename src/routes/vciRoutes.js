@@ -3,11 +3,15 @@ const router = express.Router();
 const vci = require('../services/vciService');
 const { getLastNYears } = require('../utils/dateUtils');
 
-function last5YearRange() {
-  const years = getLastNYears(5);
+function lastNYearRange(n = 5) {
+  const years = getLastNYears(n);
   const startDate = `${years[0]}-01-01`;
   const endDate = new Date().toISOString().split('T')[0];
   return { years, startDate, endDate };
+}
+
+function last5YearRange() {
+  return lastNYearRange(5);
 }
 
 const resolve = (r) => (r.status === 'fulfilled' ? r.value : { error: r.reason?.message });
@@ -179,7 +183,8 @@ router.get('/:ticker/summary', async (req, res, next) => {
     const period = req.query.period === 'yearly' ? 'yearly' : 'quarterly';
     const lang = req.query.lang === 'vi' ? 'vi' : 'en';
     const interval = ['1D', '1W', '1M'].includes(req.query.interval) ? req.query.interval : '1D';
-    const range = last5YearRange();
+    const numPeriods = parseInt(req.query.numPeriods, 10) || 5;
+    const range = lastNYearRange(numPeriods);
 
     const [overview, incomeStatement, balanceSheet, cashFlow, ratios, price] =
       await Promise.allSettled([

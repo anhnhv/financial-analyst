@@ -109,7 +109,7 @@ function transformKBSFinancial(pages) {
 
 async function fetchTicker(ticker, { period = 'quarterly', numPeriods = 20 } = {}) {
   log(`${ticker}: fetching summary (${period}, ${numPeriods} periods)...`);
-  const q = `period=${period}`;
+  const q = `period=${period}&numPeriods=${numPeriods}`;
   const summary = await get(`/${ticker}/summary?${q}`);
 
   const f = summary.financials ?? {};
@@ -135,18 +135,17 @@ async function fetchTicker(ticker, { period = 'quarterly', numPeriods = 20 } = {
 
 async function main() {
   const args = process.argv.slice(2);
-  const yearly = args.includes('--yearly');
+  const outputDir = process.env.OUTPUT_DIR || OUTPUT_DIR;
   const tickers = args.filter((a) => !a.startsWith('--')).map((t) => t.toUpperCase());
-  const period = yearly ? 'yearly' : 'quarterly';
-  const numPeriods = yearly ? 5 : 20;
+
   if (tickers.length === 0) {
-    console.error('Usage: node scripts/fetch.js <TICKER> [TICKER2 ...] [--yearly]');
-    console.error('  Default : quarterly data, last 20 periods → output/<TICKER>_quarterly.json');
-    console.error('  --yearly: annual data,    last 5 years    → output/<TICKER>_yearly.json');
+    console.error('Usage: node scripts/fetch.js <TICKER> [TICKER2 ...]');
+    console.error('  Fetches both quarterly (last 20 periods) and yearly (last 5 years) data.');
+    console.error(`  Output: ${outputDir}/<TICKER>_quarterly.json, ${outputDir}/<TICKER>_yearly.json`);
     process.exit(1);
   }
 
-  await mkdir(OUTPUT_DIR, { recursive: true });
+  await mkdir(outputDir, { recursive: true });
 
   // Fetch sectors once
   log('Fetching market sectors...');
@@ -154,37 +153,45 @@ async function main() {
     const res = await fetch(`${BASE_URL}/api/stock/sectors`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const sectors = await res.json();
-    const sectorsFile = join(OUTPUT_DIR, 'sectors.json');
+    const sectorsFile = join(outputDir, 'sectors.json');
     await writeFile(sectorsFile, JSON.stringify(sectors, null, 2), 'utf8');
-    log(`Saved → output/sectors.json (${sectors.data?.length ?? '?'} sectors)`);
+    log(`Saved → ${outputDir}/sectors.json (${sectors.data?.length ?? '?'} sectors)`);
   } catch (err) {
     console.log(err);
     console.error(`Sectors fetch failed: ${err.message}`);
   }
 
-  // Fetch each ticker
+  // Fetch each ticker for both periods
+  const PERIODS = [
+    { period: 'quarterly', numPeriods: 20 },
+    { period: 'yearly', numPeriods: 6 },
+  ];
   const results = { success: [], failed: [] };
 
   for (const ticker of tickers) {
-    try {
-      const data = await fetchTicker(ticker, { period, numPeriods });
-      const outFile = join(OUTPUT_DIR, `${ticker}_${period}.json`);
-      await writeFile(outFile, JSON.stringify(data, null, 2), 'utf8');
-      log(`Saved → output/${ticker}_${period}.json`);
-      results.success.push(ticker);
-    } catch (err) {
-      console.error(`${ticker}: FAILED — ${err.message}`);
-      results.failed.push({ ticker, error: err.message });
+    let tickerFailed = false;
+    for (const { period, numPeriods } of PERIODS) {
+      try {
+        const data = await fetchTicker(ticker, { period, numPeriods });
+        const outFile = join(outputDir, `${ticker}_${period}.json`);
+        await writeFile(outFile, JSON.stringify(data, null, 2), 'utf8');
+        log(`Saved → ${outputDir}/${ticker}_${period}.json`);
+      } catch (err) {
+        console.error(`${ticker} (${period}): FAILED — ${err.message}`);
+        results.failed.push({ ticker, period, error: err.message });
+        tickerFailed = true;
+      }
     }
+    if (!tickerFailed) results.success.push(ticker);
   }
 
   // Summary
   console.log('\n─── Summary ───────────────────────────────────────');
   console.log(`Success (${results.success.length}): ${results.success.join(', ') || 'none'}`);
   if (results.failed.length) {
-    console.log(`Failed  (${results.failed.length}): ${results.failed.map((f) => f.ticker).join(', ')}`);
+    console.log(`Failed  (${results.failed.length}): ${results.failed.map((f) => `${f.ticker}(${f.period})`).join(', ')}`);
   }
-  console.log(`Output directory: ${OUTPUT_DIR}`);
+  console.log(`Output directory: ${outputDir}`);
 }
 
 main().catch((err) => {
